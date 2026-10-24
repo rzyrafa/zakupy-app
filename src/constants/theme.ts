@@ -1,65 +1,38 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://unistyl.es/), etc.
+ * Styl inspirowany „Touchy Coffee”: pełne kolorowe pasy, grube czarne ramki,
+ * font monospace wszędzie, pigułki (radius 100), karty (radius 20), zero cieni.
+ * Aplikacja jest zawsze jasna — jedna paleta.
  */
-
-import '@/global.css';
-
-import { Platform } from 'react-native';
-
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
+export const Palette = {
+  ink: '#000000',
+  inkMuted: 'rgba(0,0,0,0.6)',
+  cream: '#ffffff',
+  terracotta: '#9f4920',
+  sage: '#788c8c',
+  sky: '#d0eaf4',
+  sunshine: '#fff78f',
+  lavender: '#a697c6',
+  moss: '#5b9133',
+  pink: '#f5b5c8',
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export const Fonts = {
+  mono: 'SpaceMono_400Regular',
+  monoBold: 'SpaceMono_700Bold',
+  script: 'Pacifico_400Regular',
+} as const;
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
-  },
-});
+export const Radius = { pill: 100, card: 20 } as const;
+
+/** Grubość czarnych ramek. */
+export const Border = 2;
 
 export const Spacing = {
-  half: 2,
   one: 4,
   two: 8,
-  three: 16,
-  four: 24,
-  five: 32,
-  six: 64,
+  three: 12,
+  four: 16,
+  five: 20,
+  six: 24,
+  eight: 32,
 } as const;
-
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
