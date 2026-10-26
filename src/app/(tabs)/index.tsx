@@ -3,8 +3,8 @@ import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { setStatusBarStyle } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, IconButton } from '@/components/button';
@@ -24,51 +24,94 @@ import { ingredientsLabel, servingsWord } from '@/lib/units';
 const PLACEHOLDERS = [Palette.pink, Palette.sky, Palette.sunshine, Palette.lavender];
 const BADGES = [Palette.terracotta, Palette.ink, Palette.moss];
 
-function RecipeCard({ item }: { item: RecipeListItem }) {
+// wysokość jednego rzędu bento (duży kafel + dwa małe) i pojedynczego szerokiego kafla
+const GROUP_HEIGHT = 300;
+const WIDE_HEIGHT = 200;
+
+type TileSize = 'large' | 'small' | 'wide';
+
+function BentoTile({ item, size, style }: { item: RecipeListItem; size: TileSize; style?: ViewStyle }) {
+  const small = size === 'small';
+  const tags = parseTags(item.tags).slice(0, 2);
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: String(item.id) } })}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}>
-      <View>
-        {item.image_uri ? (
-          <Image source={{ uri: item.image_uri }} style={styles.photo} contentFit="cover" />
-        ) : (
-          <View style={[styles.photo, styles.photoEmpty, { backgroundColor: PLACEHOLDERS[item.id % PLACEHOLDERS.length] }]}>
-            <Ionicons name="restaurant" size={48} color={Palette.ink} />
-          </View>
-        )}
+      accessibilityLabel={`Otwórz ${item.title}`}
+      style={({ pressed }) => [
+        styles.tile,
+        { backgroundColor: PLACEHOLDERS[item.id % PLACEHOLDERS.length] },
+        style,
+        pressed && { opacity: 0.85 },
+      ]}>
+      {item.image_uri ? (
+        <Image source={{ uri: item.image_uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.tileEmpty]}>
+          <Ionicons name="restaurant" size={small ? 32 : 48} color={Palette.ink} />
+        </View>
+      )}
+      <View style={styles.tileTop}>
         <RoundBadge
           top={String(item.servings)}
-          bottom={servingsWord(item.servings)}
+          bottom={small ? undefined : servingsWord(item.servings)}
           color={BADGES[item.id % BADGES.length]}
-          style={styles.badge}
+          size={small ? 40 : 64}
         />
+        {!small && tags.length > 0 && (
+          <View style={styles.tileTags}>
+            {tags.map((tag) => (
+              <TagChip key={tag.id} tag={tag} small />
+            ))}
+          </View>
+        )}
       </View>
-      <View style={styles.cardBody}>
-        <View style={styles.cardText}>
-          <AppText variant="heading" numberOfLines={2}>
-            {item.title}
-          </AppText>
+      <View style={[styles.tileCaption, small && styles.tileCaptionSmall]}>
+        <AppText variant={small ? 'bold' : 'heading'} numberOfLines={2} style={small && styles.tileTitleSmall}>
+          {item.title}
+        </AppText>
+        {!small && (
           <AppText variant="label" color={Palette.inkMuted}>
             {ingredientsLabel(item.ingredient_count)}
           </AppText>
-          {!!item.tags && (
-            <View style={styles.cardTags}>
-              {parseTags(item.tags).map((tag) => (
-                <TagChip key={tag.id} tag={tag} small />
-              ))}
-            </View>
-          )}
-        </View>
-        <IconButton
-          icon="arrow-forward"
-          size={40}
-          onPress={() => router.push({ pathname: '/recipe/[id]', params: { id: String(item.id) } })}
-          accessibilityLabel={`Otwórz ${item.title}`}
-        />
+        )}
       </View>
     </Pressable>
   );
+}
+
+/** Rząd bento: 3 przepisy (duży + dwa małe, co drugi rząd lustrzanie), 2 obok siebie albo 1 szeroki. */
+function BentoGroup({ items, mirrored }: { items: RecipeListItem[]; mirrored: boolean }) {
+  if (items.length === 1) {
+    return (
+      <View style={styles.group}>
+        <BentoTile item={items[0]} size="wide" style={{ height: WIDE_HEIGHT, flex: 1 }} />
+      </View>
+    );
+  }
+  if (items.length === 2) {
+    return (
+      <View style={[styles.group, { height: WIDE_HEIGHT + 40 }]}>
+        <BentoTile item={items[0]} size="large" style={styles.flex} />
+        <BentoTile item={items[1]} size="large" style={styles.flex} />
+      </View>
+    );
+  }
+  const [big, a, b] = items;
+  return (
+    <View style={[styles.group, { height: GROUP_HEIGHT }, mirrored && styles.groupMirrored]}>
+      <BentoTile item={big} size="large" style={styles.flex} />
+      <View style={[styles.flex, styles.column]}>
+        <BentoTile item={a} size="small" style={styles.flex} />
+        <BentoTile item={b} size="small" style={styles.flex} />
+      </View>
+    </View>
+  );
+}
+
+function chunk<T>(list: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
 }
 
 export default function RecipesScreen() {
@@ -77,6 +120,7 @@ export default function RecipesScreen() {
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [recipes, setRecipes] = useState<RecipeListItem[]>([]);
+  const groups = useMemo(() => chunk(recipes, 3), [recipes]);
 
   useFocusEffect(
     useCallback(() => {
@@ -96,8 +140,8 @@ export default function RecipesScreen() {
     <View style={styles.screen}>
       <View style={{ height: insets.top, backgroundColor: Palette.terracotta }} />
       <FlatList
-        data={recipes}
-        keyExtractor={(r) => String(r.id)}
+        data={groups}
+        keyExtractor={(g) => String(g[0].id)}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
@@ -154,7 +198,7 @@ export default function RecipesScreen() {
             </EmptyState>
           )
         }
-        renderItem={({ item }) => <RecipeCard item={item} />}
+        renderItem={({ item, index }) => <BentoGroup items={item} mirrored={index % 2 === 1} />}
       />
     </View>
   );
@@ -162,7 +206,7 @@ export default function RecipesScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Palette.sage },
-  list: { paddingBottom: Spacing.eight, gap: Spacing.five },
+  list: { paddingBottom: Spacing.eight, gap: Spacing.three },
   hero: {
     backgroundColor: Palette.terracotta,
     paddingHorizontal: Spacing.five,
@@ -181,19 +225,30 @@ const styles = StyleSheet.create({
     backgroundColor: Palette.cream,
   },
   allChipActive: { backgroundColor: Palette.ink },
-  cardTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
-  card: {
-    marginHorizontal: Spacing.five,
-    backgroundColor: Palette.cream,
+  flex: { flex: 1 },
+  group: { flexDirection: 'row', gap: Spacing.three, marginHorizontal: Spacing.five },
+  groupMirrored: { flexDirection: 'row-reverse' },
+  column: { gap: Spacing.three },
+  tile: {
     borderWidth: Border,
     borderColor: Palette.ink,
     borderRadius: Radius.card,
-    padding: Spacing.three,
-    gap: Spacing.three,
+    overflow: 'hidden',
+    justifyContent: 'space-between',
+    padding: Spacing.two,
   },
-  photo: { width: '100%', aspectRatio: 16 / 10, borderRadius: Radius.card - 6 },
-  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: 10, left: 10 },
-  cardBody: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.one },
-  cardText: { flex: 1, gap: 4 },
+  tileEmpty: { alignItems: 'center', justifyContent: 'center' },
+  tileTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: Spacing.two },
+  tileTags: { flexShrink: 1, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 4 },
+  tileCaption: {
+    backgroundColor: Palette.cream,
+    borderWidth: Border,
+    borderColor: Palette.ink,
+    borderRadius: Radius.card - 6,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    gap: 2,
+  },
+  tileCaptionSmall: { paddingHorizontal: Spacing.two, paddingVertical: 6 },
+  tileTitleSmall: { fontSize: 14, lineHeight: 18 },
 });

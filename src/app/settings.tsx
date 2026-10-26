@@ -39,8 +39,8 @@ export default function SettingsScreen() {
       <Card>
         <AppText variant="heading">DeepSeek AI</AppText>
         <AppText>
-          Funkcja AI w przygotowaniu: na podstawie składników przepisu wygeneruje opis przygotowania. Klucz jest
-          przechowywany w bezpiecznym magazynie telefonu.
+          W formularzu przepisu kliknij przycisk z iskierkami przy sposobie przygotowania, a AI przepisze Twój
+          krótki opis na czytelne kroki. Klucz jest przechowywany w bezpiecznym magazynie telefonu.
         </AppText>
 
         <AppText variant="label" style={styles.label}>

@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -14,8 +15,56 @@ import { AppText } from '@/components/text';
 import { Border, Palette, Radius, Spacing } from '@/constants/theme';
 import { deleteRecipe, getRecipe, type Recipe } from '@/db/recipes';
 import { addRecipeToShoppingList } from '@/db/shopping';
+import { type InstructionBlock, parseInstructions } from '@/lib/instructions';
 import { parseTags } from '@/lib/tags';
 import { formatAmount, ingredientsLabel, servingsWord } from '@/lib/units';
+
+/** Jeden blok opisu przygotowania na mchowej karcie. */
+function InstructionRow({ block }: { block: InstructionBlock }) {
+  switch (block.type) {
+    case 'heading':
+      return (
+        <AppText variant="bold" color={Palette.cream} style={[styles.underline, styles.blockHeading]}>
+          {block.text.toUpperCase()}
+        </AppText>
+      );
+    case 'step':
+      return (
+        <View style={styles.step}>
+          <View style={styles.stepNumber}>
+            <AppText variant="bold">{block.number}</AppText>
+          </View>
+          <AppText color={Palette.cream} style={[styles.flex, styles.instructions]}>
+            {block.text}
+          </AppText>
+        </View>
+      );
+    case 'bullet':
+      return (
+        <View style={styles.step}>
+          <AppText variant="bold" color={Palette.cream} style={styles.bullet}>
+            •
+          </AppText>
+          <AppText color={Palette.cream} style={[styles.flex, styles.instructions]}>
+            {block.text}
+          </AppText>
+        </View>
+      );
+    case 'tip':
+      return (
+        <View style={styles.tip}>
+          <Ionicons name="bulb" size={22} color={Palette.ink} />
+          <AppText style={[styles.flex, styles.instructions]}>{block.text}</AppText>
+        </View>
+      );
+    default:
+      return (
+        <AppText color={Palette.cream} style={styles.instructions}>
+          {block.text}
+        </AppText>
+      );
+  }
+}
 
 export default function RecipeDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -100,9 +149,13 @@ export default function RecipeDetailsScreen() {
         <AppText variant="bold" color={Palette.cream} style={styles.underline}>
           PRZYGOTOWANIE
         </AppText>
-        <AppText color={Palette.cream} style={styles.instructions}>
-          {recipe.instructions || 'Brak opisu przygotowania.'}
-        </AppText>
+        {recipe.instructions ? (
+          parseInstructions(recipe.instructions).map((block, i) => <InstructionRow key={i} block={block} />)
+        ) : (
+          <AppText color={Palette.cream} style={styles.instructions}>
+            Brak opisu przygotowania.
+          </AppText>
+        )}
       </Card>
 
       <View style={styles.row}>
@@ -138,4 +191,28 @@ const styles = StyleSheet.create({
   ingredientDivider: { borderTopWidth: 1, borderTopColor: Palette.ink },
   underline: { textDecorationLine: 'underline' },
   instructions: { lineHeight: 24 },
+  blockHeading: { marginTop: Spacing.two },
+  step: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.pill,
+    borderWidth: Border,
+    borderColor: Palette.ink,
+    backgroundColor: Palette.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bullet: { width: 32, textAlign: 'center', lineHeight: 24 },
+  tip: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    padding: Spacing.three,
+    backgroundColor: Palette.sunshine,
+    borderWidth: Border,
+    borderColor: Palette.ink,
+    borderRadius: Radius.card - 6,
+  },
 });

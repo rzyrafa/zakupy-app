@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { Button, IconButton } from '@/components/button';
@@ -14,6 +15,7 @@ import { AppText } from '@/components/text';
 import { UnitPicker } from '@/components/unit-picker';
 import { Border, Palette, Radius, Spacing } from '@/constants/theme';
 import { type Recipe, saveRecipe } from '@/db/recipes';
+import { NoApiKeyError, rewriteInstructions } from '@/lib/deepseek';
 import { deleteImage, persistImage, pickImage } from '@/lib/images';
 import { parseTags, TAGS } from '@/lib/tags';
 import { formatQuantity, parseQuantity } from '@/lib/units';
@@ -44,6 +46,9 @@ export function RecipeForm({ initial, onSaved }: Props) {
       : [newRow()]
   );
   const [saving, setSaving] = useState(false);
+  const [rewriting, setRewriting] = useState(false);
+  // wersja sprzed przepisania przez AI (do cofnięcia)
+  const [previousInstructions, setPreviousInstructions] = useState<string | null>(null);
 
   const updateRow = (key: number, patch: Partial<IngredientRow>) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -59,10 +64,40 @@ export function RecipeForm({ initial, onSaved }: Props) {
     if (uri) setImageUri(uri);
   };
 
-  const handleSave = async () => {
-    const ingredients = rows
+  const collectIngredients = () =>
+    rows
       .filter((r) => r.name.trim())
       .map((r) => ({ name: r.name.trim(), quantity: parseQuantity(r.quantity), unit: r.unit }));
+
+  const handleRewrite = async () => {
+    if (!instructions.trim())
+      return Alert.alert('Brak opisu', 'Najpierw wpisz krótki opis, a AI ułoży go w czytelne kroki.');
+
+    setRewriting(true);
+    try {
+      const result = await rewriteInstructions({
+        title: title.trim(),
+        ingredients: collectIngredients(),
+        instructions: instructions.trim(),
+      });
+      setPreviousInstructions(instructions);
+      setInstructions(result);
+    } catch (e) {
+      if (e instanceof NoApiKeyError) {
+        Alert.alert('Brak klucza API', 'Dodaj klucz DeepSeek w ustawieniach.', [
+          { text: 'Anuluj', style: 'cancel' },
+          { text: 'Ustawienia', onPress: () => router.push('/settings') },
+        ]);
+      } else {
+        Alert.alert('Błąd AI', e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      setRewriting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const ingredients = collectIngredients();
 
     if (!title.trim()) return Alert.alert('Brak nazwy', 'Podaj nazwę przepisu.');
     if (ingredients.length === 0) return Alert.alert('Brak składników', 'Dodaj przynajmniej jeden składnik.');
@@ -164,13 +199,43 @@ export function RecipeForm({ initial, onSaved }: Props) {
       </Card>
 
       <Card>
-        <AppText variant="label">Sposób przygotowania</AppText>
+        <View style={styles.cardHeader}>
+          <AppText variant="label" style={styles.flex}>
+            Sposób przygotowania
+          </AppText>
+          {rewriting ? (
+            <View style={styles.aiSpinner}>
+              <ActivityIndicator color={Palette.ink} />
+            </View>
+          ) : (
+            <IconButton
+              icon="sparkles"
+              size={40}
+              color={Palette.lavender}
+              iconColor={Palette.ink}
+              onPress={handleRewrite}
+              accessibilityLabel="Popraw opis z AI"
+            />
+          )}
+        </View>
         <PillInput
           value={instructions}
           onChangeText={setInstructions}
-          placeholder="Opisz krok po kroku, jak przygotować danie…"
+          placeholder="Opisz krótko, jak przygotować danie. Przycisk AI ułoży to w kroki…"
           multiline
+          editable={!rewriting}
         />
+        {previousInstructions !== null && (
+          <Button
+            title="Cofnij zmiany AI"
+            icon="arrow-undo"
+            variant="outline"
+            onPress={() => {
+              setInstructions(previousInstructions);
+              setPreviousInstructions(null);
+            }}
+          />
+        )}
       </Card>
 
       <Button
@@ -189,6 +254,8 @@ const styles = StyleSheet.create({
   container: { padding: Spacing.five, gap: Spacing.five, paddingBottom: 48 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   flex: { flex: 1 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  aiSpinner: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   ingredient: { gap: Spacing.two },
   ingredientDivider: { borderTopWidth: 1, borderTopColor: Palette.ink, paddingTop: Spacing.three },
