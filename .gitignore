@@ -44,3 +44,6 @@ example
 
 # zbudowane APK (kopie z android/app/build)
 /apk
+
+# notatki lokalne dla Claude Code
+CLAUDE.md
